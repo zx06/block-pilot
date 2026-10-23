@@ -51,6 +51,11 @@ pnpm run preview
 - 触控为底部三键，非全屏虚拟摇杆。
 - 音效 / 排行榜未做。
 
+## 在线试玩
+
+- Production: https://block-pilot.pages.dev/
+- 本次部署预览：https://eebde444.block-pilot.pages.dev/
+
 ## 仓库
 
 https://github.com/zx06/block-pilot
