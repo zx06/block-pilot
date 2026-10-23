@@ -10,7 +10,7 @@ export function bindInput(
   stateRef: { current: GameState },
   onRestart: () => void,
 ): InputController {
-  const held = { left: false, right: false }
+  const held = { left: false, right: false, up: false, down: false }
   let moveAcc = 0
   const MOVE_MS = 90
 
@@ -29,6 +29,16 @@ export function bindInput(
       case 'D':
       case 'ArrowRight':
         held.right = true
+        break
+      case 'w':
+      case 'W':
+      case 'ArrowUp':
+        held.up = true
+        break
+      case 's':
+      case 'S':
+      case 'ArrowDown':
+        held.down = true
         break
       case ' ':
       case 'j':
@@ -60,6 +70,16 @@ export function bindInput(
       case 'ArrowRight':
         held.right = false
         break
+      case 'w':
+      case 'W':
+      case 'ArrowUp':
+        held.up = false
+        break
+      case 's':
+      case 'S':
+      case 'ArrowDown':
+        held.down = false
+        break
     }
   }
 
@@ -82,24 +102,21 @@ export function bindInput(
     el.addEventListener('pointercancel', up)
   }
 
-  bindHold(
-    document.getElementById('btn-left'),
-    () => {
-      held.left = true
-    },
-    () => {
-      held.left = false
-    },
-  )
-  bindHold(
-    document.getElementById('btn-right'),
-    () => {
-      held.right = true
-    },
-    () => {
-      held.right = false
-    },
-  )
+  const bindAxis = (id: string, key: keyof typeof held) => {
+    bindHold(
+      document.getElementById(id),
+      () => {
+        held[key] = true
+      },
+      () => {
+        held[key] = false
+      },
+    )
+  }
+  bindAxis('btn-left', 'left')
+  bindAxis('btn-right', 'right')
+  bindAxis('btn-up', 'up')
+  bindAxis('btn-down', 'down')
   bindHold(document.getElementById('btn-shoot'), () => fire(stateRef.current))
   bindHold(document.getElementById('btn-pause'), () => {
     const s = stateRef.current
@@ -117,8 +134,9 @@ export function bindInput(
     moveAcc += dtMs
     while (moveAcc >= MOVE_MS) {
       moveAcc -= MOVE_MS
-      if (held.left && !held.right) movePlane(stateRef.current, -1)
-      else if (held.right && !held.left) movePlane(stateRef.current, 1)
+      const dc = (held.left ? -1 : 0) + (held.right ? 1 : 0)
+      const dr = (held.up ? -1 : 0) + (held.down ? 1 : 0)
+      if (dc !== 0 || dr !== 0) movePlane(stateRef.current, dc, dr)
     }
   }
 

@@ -2,7 +2,7 @@ import {
   COLS,
   ROWS,
   MAX_LIVES,
-  PLANE_Y,
+  PLANE_START_ROW,
   FALL_MS_WITH_CHUTE,
   BULLET_SPEED_CELLS_PER_SEC,
   FIRE_COOLDOWN_MS,
@@ -12,7 +12,7 @@ import {
 } from './types'
 import { createEmptyBoard, clearFullLines, canOccupy, lockCells } from './board'
 import { randomShape, placeShapeAtTop } from './shapes'
-import { applyBulletHit, chuteCell } from './combat'
+import { applyBulletHit, chuteCells, isChuteHit } from './combat'
 
 export function createGame(): GameState {
   return {
@@ -20,6 +20,7 @@ export function createGame(): GameState {
     board: createEmptyBoard(),
     falling: null,
     planeCol: Math.floor(COLS / 2),
+    planeRow: PLANE_START_ROW,
     lives: MAX_LIVES,
     score: 0,
     bullets: [],
@@ -51,7 +52,6 @@ function tryMoveFalling(state: GameState, dr: number, dc: number): boolean {
   if (!state.falling) return false
   const next = state.falling.cells.map((c) => ({ ...c, r: c.r + dr, c: c.c + dc }))
   if (cellsCollideBoard(state.board, next)) return false
-  // also can't go below floor
   if (next.some((c) => c.r >= ROWS)) return false
   state.falling = { ...state.falling, cells: next }
   return true
@@ -73,15 +73,11 @@ function lockFalling(state: GameState) {
 function planeHitCheck(state: GameState) {
   if (state.invulnMs > 0) return
   const pc = state.planeCol
-  const pr = PLANE_Y
-  const hitStack = state.board[pr]?.[pc] != null
-  const hitFall =
-    state.falling?.cells.some((c) => c.r === pr && c.c === pc) ||
-    (state.falling && (() => {
-      const ch = chuteCell(state.falling!)
-      return ch && ch.r === pr && ch.c === pc
-    })())
-  if (hitStack || hitFall) {
+  const pr = state.planeRow
+  const hitStack = pr >= 0 && pr < ROWS && state.board[pr]?.[pc] != null
+  const hitFallBody = state.falling?.cells.some((c) => c.r === pr && c.c === pc) ?? false
+  const hitFallChute = state.falling ? isChuteHit(state.falling, pr, pc) : false
+  if (hitStack || hitFallBody || hitFallChute) {
     state.lives -= 1
     state.invulnMs = 1200
     state.score = Math.max(0, state.score - 20)
@@ -95,11 +91,10 @@ function updateBullets(state: GameState, dtMs: number) {
   const dy = (BULLET_SPEED_CELLS_PER_SEC * dtMs) / 1000
   const nextBullets: Bullet[] = []
   for (const b of state.bullets) {
-    let y = b.y - dy
-    let x = b.x
+    const y = b.y - dy
+    const x = b.x
     let alive = true
 
-    // sample along path for collision
     const steps = Math.max(1, Math.ceil(dy * 2))
     for (let i = 1; i <= steps && alive; i++) {
       const sy = b.y - (dy * i) / steps
@@ -111,7 +106,6 @@ function updateBullets(state: GameState, dtMs: number) {
         break
       }
 
-      // stacked cells: first version cannot pierce (bullet stops, no damage)
       if (br >= 0 && br < ROWS && bc >= 0 && bc < COLS && state.board[br][bc]) {
         alive = false
         break
@@ -126,15 +120,6 @@ function updateBullets(state: GameState, dtMs: number) {
           alive = false
           break
         }
-        // also check chute cell explicitly when apply didn't (same)
-        const ch = state.falling ? chuteCell(state.falling) : null
-        if (ch && ch.r === br && ch.c === bc) {
-          const r2 = applyBulletHit(state.falling, br, bc)
-          state.falling = r2.block
-          state.score += 5
-          alive = false
-          break
-        }
       }
     }
 
@@ -145,9 +130,21 @@ function updateBullets(state: GameState, dtMs: number) {
   state.bullets = nextBullets
 }
 
-export function movePlane(state: GameState, dir: -1 | 1) {
-  if (state.phase !== 'playing') return
-  state.planeCol = Math.max(0, Math.min(COLS - 1, state.planeCol + dir))
+/**
+ * Move plane by (dc, dr). Stays in board; cannot enter stacked cells (wall).
+ * Returns whether the position changed.
+ */
+export function movePlane(state: GameState, dc: number, dr = 0): boolean {
+  if (state.phase !== 'playing') return false
+  const nc = state.planeCol + dc
+  const nr = state.planeRow + dr
+  if (nc < 0 || nc >= COLS || nr < 0 || nr >= ROWS) return false
+  // 别穿墙：不能进入已落地堆叠
+  if (state.board[nr][nc] != null) return false
+  if (nc === state.planeCol && nr === state.planeRow) return false
+  state.planeCol = nc
+  state.planeRow = nr
+  return true
 }
 
 export function fire(state: GameState) {
@@ -156,7 +153,7 @@ export function fire(state: GameState) {
   state.bullets.push({
     id: state.nextId++,
     x: state.planeCol + 0.5,
-    y: PLANE_Y - 0.2,
+    y: state.planeRow - 0.2,
   })
   state.fireCooldownMs = FIRE_COOLDOWN_MS
 }
@@ -199,3 +196,6 @@ export function tick(state: GameState, dtMs: number, rng: () => number = Math.ra
   planeHitCheck(state)
   return state
 }
+
+// re-export for tests that need chute geometry
+export { chuteCells }

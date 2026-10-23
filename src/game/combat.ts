@@ -1,5 +1,5 @@
 import type { FallingBlock, ShapeCell } from './types'
-import { HITS_TO_DESTROY, FALL_MS_NO_CHUTE } from './types'
+import { HITS_TO_DESTROY, FALL_MS_NO_CHUTE, CHUTE_WIDTH } from './types'
 
 export type HitResult = {
   block: FallingBlock | null
@@ -7,24 +7,50 @@ export type HitResult = {
   chuteHit: boolean
 }
 
-/** Chute occupies the cell directly above the topmost / leftmost top cell. */
-export function chuteCell(block: FallingBlock): { r: number; c: number } | null {
-  if (!block.hasChute || block.cells.length === 0) return null
-  let top = block.cells[0]
+export type ChuteCell = { r: number; c: number }
+
+/**
+ * Parachute: CHUTE_WIDTH cells in one row above the block's top,
+ * horizontally centered on the block's bounding box.
+ */
+export function chuteCells(block: FallingBlock): ChuteCell[] {
+  if (!block.hasChute || block.cells.length === 0) return []
+  let minR = Infinity
+  let minC = Infinity
+  let maxC = -Infinity
   for (const cell of block.cells) {
-    if (cell.r < top.r || (cell.r === top.r && cell.c < top.c)) top = cell
+    if (cell.r < minR) minR = cell.r
+    if (cell.c < minC) minC = cell.c
+    if (cell.c > maxC) maxC = cell.c
   }
-  return { r: top.r - 1, c: top.c }
+  const blockCenter = (minC + maxC) / 2
+  const startC = Math.round(blockCenter - (CHUTE_WIDTH - 1) / 2)
+  const row = minR - 1
+  const cells: ChuteCell[] = []
+  for (let i = 0; i < CHUTE_WIDTH; i++) {
+    cells.push({ r: row, c: startC + i })
+  }
+  return cells
+}
+
+/** @deprecated use chuteCells — single-cell helper for tests/compat */
+export function chuteCell(block: FallingBlock): ChuteCell | null {
+  const cells = chuteCells(block)
+  if (cells.length === 0) return null
+  return cells[Math.floor(cells.length / 2)]
+}
+
+export function isChuteHit(block: FallingBlock, br: number, bc: number): boolean {
+  return chuteCells(block).some((c) => c.r === br && c.c === bc)
 }
 
 /**
  * Apply one bullet hit at integer grid (br, bc).
- * - If chute cell: destroy chute and accelerate.
+ * - If any chute cell: destroy chute and accelerate.
  * - If falling cell: increment hits; remove at threshold.
  */
 export function applyBulletHit(block: FallingBlock, br: number, bc: number): HitResult {
-  const chute = chuteCell(block)
-  if (chute && chute.r === br && chute.c === bc) {
+  if (isChuteHit(block, br, bc)) {
     return {
       block: {
         ...block,

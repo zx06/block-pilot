@@ -9,9 +9,13 @@ export const HITS_TO_DESTROY = 2
 export const FALL_MS_WITH_CHUTE = 900
 export const FALL_MS_NO_CHUTE = 220
 
+/** Parachute spans this many columns, centered on the falling block. */
+export const CHUTE_WIDTH = 3
+
 /** Plane. */
 export const MAX_LIVES = 3
-export const PLANE_Y = ROWS - 1 // bottom row index for plane body
+/** Default spawn row (bottom). Kept for docs; runtime uses state.planeRow. */
+export const PLANE_START_ROW = ROWS - 1
 export const BULLET_SPEED_CELLS_PER_SEC = 18
 export const FIRE_COOLDOWN_MS = 180
 
@@ -42,6 +46,7 @@ export type GameState = {
   board: Cell[][] // [row][col]
   falling: FallingBlock | null
   planeCol: number
+  planeRow: number
   lives: number
   score: number
   bullets: Bullet[]

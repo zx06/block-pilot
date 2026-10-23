@@ -1,6 +1,6 @@
 import type { GameState } from './game/types'
-import { COLS, ROWS, PLANE_Y } from './game/types'
-import { chuteCell } from './game/combat'
+import { COLS, ROWS } from './game/types'
+import { chuteCells } from './game/combat'
 
 const PAD_TOP = 1 // extra row for chute visibility above
 
@@ -23,7 +23,6 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.fillStyle = '#0f172a'
   ctx.fillRect(0, 0, w, h)
 
-  // grid
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < COLS; c++) {
       const x = ox + c * cell
@@ -47,7 +46,6 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState) {
     ctx.globalAlpha = 1
   }
 
-  // stacked
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const cellData = state.board[r][c]
@@ -55,33 +53,42 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState) {
     }
   }
 
-  // falling
   if (state.falling) {
     for (const c of state.falling.cells) {
-      const hits = (c as { hits?: number }).hits ?? 0
+      const hits = c.hits ?? 0
       const alpha = hits > 0 ? 0.55 : 1
       drawCell(c.r, c.c, c.color, alpha)
     }
-    const ch = chuteCell(state.falling)
-    if (ch) {
-      const r = ch.r + PAD_TOP
-      const x = ox + ch.c * cell
-      const y = oy + r * cell
-      // parachute canopy
+    const chutes = chuteCells(state.falling)
+    if (chutes.length > 0) {
+      const minC = Math.min(...chutes.map((c) => c.c))
+      const maxC = Math.max(...chutes.map((c) => c.c))
+      const row = chutes[0].r + PAD_TOP
+      const x0 = ox + minC * cell
+      const x1 = ox + (maxC + 1) * cell
+      const y = oy + row * cell
+      const midX = (x0 + x1) / 2
+      // canopy spanning 3 cells
       ctx.fillStyle = '#fca5a5'
       ctx.beginPath()
-      ctx.ellipse(x + cell / 2, y + cell * 0.45, cell * 0.42, cell * 0.28, 0, Math.PI, 0)
+      ctx.ellipse(midX, y + cell * 0.42, (x1 - x0) * 0.48, cell * 0.32, 0, Math.PI, 0)
       ctx.fill()
       ctx.strokeStyle = '#fecaca'
+      ctx.lineWidth = Math.max(1, cell * 0.06)
       ctx.beginPath()
-      ctx.moveTo(x + cell * 0.2, y + cell * 0.45)
-      ctx.lineTo(x + cell / 2, y + cell * 0.95)
-      ctx.lineTo(x + cell * 0.8, y + cell * 0.45)
+      ctx.moveTo(x0 + cell * 0.25, y + cell * 0.42)
+      ctx.lineTo(midX, y + cell * 0.95)
+      ctx.lineTo(x1 - cell * 0.25, y + cell * 0.42)
       ctx.stroke()
+      // faint cell markers so hitboxes are visible
+      for (const ch of chutes) {
+        const x = ox + ch.c * cell
+        ctx.strokeStyle = 'rgba(252,165,165,0.35)'
+        ctx.strokeRect(x + cell * 0.15, y + cell * 0.1, cell * 0.7, cell * 0.55)
+      }
     }
   }
 
-  // bullets
   for (const b of state.bullets) {
     const r = b.y + PAD_TOP
     const x = ox + b.x * cell - cell * 0.08
@@ -90,9 +97,8 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState) {
     ctx.fillRect(x, y, cell * 0.16, cell * 0.35)
   }
 
-  // plane
   {
-    const r = PLANE_Y + PAD_TOP
+    const r = state.planeRow + PAD_TOP
     const x = ox + state.planeCol * cell
     const y = oy + r * cell
     const blink = state.invulnMs > 0 && Math.floor(state.invulnMs / 100) % 2 === 0
@@ -110,7 +116,6 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState) {
     }
   }
 
-  // soft vignette top label area
   ctx.fillStyle = 'rgba(15,23,42,0.35)'
   ctx.fillRect(0, 0, w, oy + cell * 0.15)
 }
