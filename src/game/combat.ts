@@ -1,10 +1,22 @@
-import type { FallingBlock, ShapeCell } from './types'
-import { HITS_TO_DESTROY, FALL_MS_NO_CHUTE, CHUTE_WIDTH } from './types'
+import type { Cell, FallingBlock, ShapeCell } from './types'
+import { HITS_TO_DESTROY, FALL_MS_NO_CHUTE, CHUTE_WIDTH, COLS, ROWS } from './types'
+import { splitFallingAfterDestroy } from './split'
 
 export type HitResult = {
+  /** Updated single block before split (null if fully destroyed). */
   block: FallingBlock | null
+  /** After destroy: 0..n independent pieces (already split). Empty if fully gone. */
+  pieces: FallingBlock[]
   destroyedCell: boolean
   chuteHit: boolean
+  /** True if this bullet interacted with the block (chute or body). */
+  hit: boolean
+}
+
+export type BoardHitResult = {
+  board: Cell[][]
+  destroyed: boolean
+  hit: boolean
 }
 
 export type ChuteCell = { r: number; c: number }
@@ -47,24 +59,38 @@ export function isChuteHit(block: FallingBlock, br: number, bc: number): boolean
 /**
  * Apply one bullet hit at integer grid (br, bc).
  * - If any chute cell: destroy chute and accelerate.
- * - If falling cell: increment hits; remove at threshold.
+ * - If falling cell: increment hits; remove at threshold and split if disconnected.
  */
-export function applyBulletHit(block: FallingBlock, br: number, bc: number): HitResult {
+export function applyBulletHit(
+  block: FallingBlock,
+  br: number,
+  bc: number,
+  nextId: () => number = () => block.id,
+): HitResult {
   if (isChuteHit(block, br, bc)) {
+    const updated = {
+      ...block,
+      hasChute: false,
+      fallIntervalMs: FALL_MS_NO_CHUTE,
+    }
     return {
-      block: {
-        ...block,
-        hasChute: false,
-        fallIntervalMs: FALL_MS_NO_CHUTE,
-      },
+      block: updated,
+      pieces: [updated],
       destroyedCell: false,
       chuteHit: true,
+      hit: true,
     }
   }
 
   const idx = block.cells.findIndex((c) => c.r === br && c.c === bc)
   if (idx < 0) {
-    return { block, destroyedCell: false, chuteHit: false }
+    return {
+      block,
+      pieces: [block],
+      destroyedCell: false,
+      chuteHit: false,
+      hit: false,
+    }
   }
 
   const cells: ShapeCell[] = block.cells.map((c, i) => {
@@ -76,20 +102,51 @@ export function applyBulletHit(block: FallingBlock, br: number, bc: number): Hit
   if (hits >= HITS_TO_DESTROY) {
     const remaining = cells.filter((_, i) => i !== idx)
     if (remaining.length === 0) {
-      return { block: null, destroyedCell: true, chuteHit: false }
+      return {
+        block: null,
+        pieces: [],
+        destroyedCell: true,
+        chuteHit: false,
+        hit: true,
+      }
     }
+    const template: FallingBlock = { ...block, cells: remaining }
+    const pieces = splitFallingAfterDestroy(remaining, template, nextId)
     return {
-      block: { ...block, cells: remaining },
+      block: pieces.length === 1 ? pieces[0] : null,
+      pieces,
       destroyedCell: true,
       chuteHit: false,
+      hit: true,
     }
   }
 
+  const updated = { ...block, cells }
   return {
-    block: { ...block, cells },
+    block: updated,
+    pieces: [updated],
     destroyedCell: false,
     chuteHit: false,
+    hit: true,
   }
+}
+
+/** Hit a locked board cell; destroy after HITS_TO_DESTROY. */
+export function applyBoardHit(board: Cell[][], br: number, bc: number): BoardHitResult {
+  if (br < 0 || br >= ROWS || bc < 0 || bc >= COLS) {
+    return { board, destroyed: false, hit: false }
+  }
+  const cell = board[br][bc]
+  if (!cell) return { board, destroyed: false, hit: false }
+
+  const next = board.map((row) => row.slice())
+  const hits = (cell.hits ?? 0) + 1
+  if (hits >= HITS_TO_DESTROY) {
+    next[br][bc] = null
+    return { board: next, destroyed: true, hit: true }
+  }
+  next[br][bc] = { ...cell, hits }
+  return { board: next, destroyed: false, hit: true }
 }
 
 /** Destroy parachute without hitting a body cell. */

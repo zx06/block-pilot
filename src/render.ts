@@ -49,17 +49,20 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState) {
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const cellData = state.board[r][c]
-      if (cellData) drawCell(r, c, cellData.color)
+      if (cellData) {
+        const alpha = (cellData.hits ?? 0) > 0 ? 0.55 : 1
+        drawCell(r, c, cellData.color, alpha)
+      }
     }
   }
 
-  if (state.falling) {
-    for (const c of state.falling.cells) {
+  for (const block of state.falling) {
+    for (const c of block.cells) {
       const hits = c.hits ?? 0
       const alpha = hits > 0 ? 0.55 : 1
       drawCell(c.r, c.c, c.color, alpha)
     }
-    const chutes = chuteCells(state.falling)
+    const chutes = chuteCells(block)
     if (chutes.length > 0) {
       const minC = Math.min(...chutes.map((c) => c.c))
       const maxC = Math.max(...chutes.map((c) => c.c))
@@ -68,7 +71,6 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState) {
       const x1 = ox + (maxC + 1) * cell
       const y = oy + row * cell
       const midX = (x0 + x1) / 2
-      // canopy spanning 3 cells
       ctx.fillStyle = '#fca5a5'
       ctx.beginPath()
       ctx.ellipse(midX, y + cell * 0.42, (x1 - x0) * 0.48, cell * 0.32, 0, Math.PI, 0)
@@ -80,7 +82,6 @@ export function draw(ctx: CanvasRenderingContext2D, state: GameState) {
       ctx.lineTo(midX, y + cell * 0.95)
       ctx.lineTo(x1 - cell * 0.25, y + cell * 0.42)
       ctx.stroke()
-      // faint cell markers so hitboxes are visible
       for (const ch of chutes) {
         const x = ox + ch.c * cell
         ctx.strokeStyle = 'rgba(252,165,165,0.35)'

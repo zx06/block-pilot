@@ -2,10 +2,10 @@
 export const COLS = 10
 export const ROWS = 20
 
-/** Hits needed to destroy one falling cell. */
+/** Hits needed to destroy one falling or locked cell. */
 export const HITS_TO_DESTROY = 2
 
-/** Slow fall with parachute; fast after chute destroyed. */
+/** Slow fall with parachute; fast after chute destroyed / split. */
 export const FALL_MS_WITH_CHUTE = 900
 export const FALL_MS_NO_CHUTE = 220
 
@@ -19,7 +19,7 @@ export const PLANE_START_ROW = ROWS - 1
 export const BULLET_SPEED_CELLS_PER_SEC = 18
 export const FIRE_COOLDOWN_MS = 180
 
-export type Cell = { color: string } | null
+export type Cell = { color: string; hits?: number } | null
 
 export type ShapeCell = { r: number; c: number; color: string; hits?: number }
 
@@ -44,7 +44,8 @@ export type GamePhase = 'playing' | 'paused' | 'gameover'
 export type GameState = {
   phase: GamePhase
   board: Cell[][] // [row][col]
-  falling: FallingBlock | null
+  /** Multiple independent falling pieces (spawns + splits). */
+  falling: FallingBlock[]
   planeCol: number
   planeRow: number
   lives: number
