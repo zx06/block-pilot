@@ -54,7 +54,7 @@ pnpm run preview
 ## 在线试玩
 
 - Production: https://block-pilot.pages.dev/
-- 本次部署预览：https://1a626ef5.block-pilot.pages.dev
+- 本次部署预览：https://8c1a8501.block-pilot.pages.dev
 
 ## 仓库
 
